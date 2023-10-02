@@ -1,74 +1,115 @@
-using System;
 using UnityEngine;
 
 public class PlayerInputController : MonoBehaviour
 {
-    private float horizontal;
-    
-    public float speed = 8f;
-    public float jumpingPower = 16f;
-    private bool isFacingRight = true;
+    private Rigidbody2D playerRigidbody;
 
-    [SerializeField] private Rigidbody2D rb;
-    [SerializeField] private Transform groundCheck;
-    [SerializeField] private LayerMask groundLayer;
+    private Vector2 velocity;
+    private float inputAxis;
 
-    //New Crouch Variables
-    [SerializeField] public GameObject standingSpriteSet;
-    [SerializeField] public GameObject crouchingSpriteSet;
-    [SerializeField] public Transform heightCheck;
-    public bool isCrouching = false;
+    private Camera worldCamera;
 
+    public float moveSpeed;
+    public float maxJumpHeight = 5f;
+    public float maxJumpTime = 1f;
+
+    public float jumpForce => (2f * maxJumpHeight) / (maxJumpTime / 2f);
+    public float gravity => (-2f * maxJumpHeight) / Mathf.Pow((maxJumpTime / 2f), 2f);
+
+    public bool grounded { get; private set; }
+    public bool jumping { get; private set; }
+    public bool running => Mathf.Abs(velocity.x) > 0.25f || Mathf.Abs(inputAxis) > 0.25f;
+    public bool sliding => (inputAxis > 0f && velocity.x < 0f) || (inputAxis < 0f && velocity.x > 0f);
+
+    private void Awake()
+    {
+        playerRigidbody = GetComponent<Rigidbody2D>();
+        worldCamera = Camera.main;
+    }
     void Update()
     {
-        horizontal = Input.GetAxisRaw("Horizontal");
+        HorizontalMovement();
 
-        if (Input.GetButtonDown("Jump") && IsGrounded())
+        grounded = playerRigidbody.Raycast(Vector2.down);
+
+        if (grounded)
         {
-            rb.velocity = new Vector2(rb.velocity.x, jumpingPower);
+            GroundedMovement();
         }
 
-        if (Input.GetButtonUp("Jump") && rb.velocity.y > 0f)
-        {
-            rb.velocity = new Vector2(rb.velocity.x, rb.velocity.y * 0.5f);
-        }
-
-        if (Input.GetAxisRaw("Vertical") < 0)
-        {
-            standingSpriteSet.SetActive(false);
-            crouchingSpriteSet.SetActive(true);
-        }
-
-        if (Input.GetAxisRaw("Vertical") >= 0 && !HeightCheck())
-        {
-            crouchingSpriteSet.SetActive(false);
-            standingSpriteSet.SetActive(true);
-        }
-        Flip();
+        ApplyGravity();
     }
+
+    private void HorizontalMovement()
+    {
+        inputAxis = Input.GetAxis("Horizontal");
+        velocity.x = Mathf.MoveTowards(velocity.x, inputAxis * moveSpeed, moveSpeed * Time.deltaTime);
+
+        if(playerRigidbody.Raycast(Vector2.right * velocity.x))
+        {
+            velocity.x = 0f;
+        }
+
+        if(velocity.x > 0f)
+        {
+            transform.eulerAngles = Vector3.zero;
+        }
+        else if(velocity.x < 0f)
+        {
+            transform.eulerAngles = new Vector3(0f, 180f, 0f);
+        }
+    }
+
+    private void GroundedMovement()
+    {
+        velocity.y = Mathf.Max(velocity.y, 0f);
+        jumping = velocity.y > 0f;
+
+        if(Input.GetButtonDown("Jump"))
+        {
+            velocity.y = jumpForce;
+            jumping = true;
+        }
+    }
+
+    private void ApplyGravity()
+    {
+        bool falling = velocity.y < 0f || !Input.GetButton("Jump");
+        float multiplier = falling ? 2f : 1f;
+
+        velocity.y += gravity * multiplier * Time.deltaTime;
+        velocity.y = Mathf.Max(velocity.y, gravity / 2f);
+    }
+
     private void FixedUpdate()
     {
-        rb.velocity = new Vector2(horizontal * speed, rb.velocity.y);
+        Vector2 position = playerRigidbody.position;
+        position += velocity * Time.fixedDeltaTime;
+
+        Vector2 leftEdge = worldCamera.ScreenToWorldPoint(Vector2.zero);
+        Vector2 rightEdge = worldCamera.ScreenToWorldPoint(new Vector2(Screen.width, Screen.height));
+
+        position.x = Mathf.Clamp(position.x, leftEdge.x + 0.5f, rightEdge.x - 0.5f);
+
+        playerRigidbody.MovePosition(position);
     }
 
-    private bool HeightCheck()
+    private void OnCollisionEnter2D(Collision2D collision)
     {
-        return Physics2D.OverlapCircle(heightCheck.position, 0.4f, groundLayer);
-    }
-
-    private bool IsGrounded()
-    {
-        return Physics2D.OverlapCircle(groundCheck.position, 0.2f, groundLayer);
-    }
-
-    private void Flip()
-    {
-        if (isFacingRight && horizontal < 0f || !isFacingRight && horizontal > 0f)
+        if(collision.gameObject.layer == LayerMask.NameToLayer("Enemy"))
         {
-            isFacingRight = !isFacingRight;
-            Vector3 localScale = transform.localScale;
-            localScale.x *= -1f;
-            transform.localScale = localScale;
+            if(transform.DotTest(collision.transform, Vector2.down))
+            {
+                velocity.y = jumpForce / 2f;
+            }
+        }
+
+        else if(collision.gameObject.layer != LayerMask.NameToLayer("PowerUp"))
+        {
+            if (transform.DotTest(collision.transform, Vector2.up))
+            {
+                velocity.y = 0f;
+            }
         }
     }
 }
