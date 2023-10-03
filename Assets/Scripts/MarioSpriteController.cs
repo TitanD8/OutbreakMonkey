@@ -26,6 +26,7 @@ public class MarioSpriteController : MonoBehaviour
     private void OnDisable()
     {
         spriteRenderer.enabled = false;
+        run.enabled = false;
     }
 
     private void FixedUpdate()
