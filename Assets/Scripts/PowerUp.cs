@@ -39,7 +39,7 @@ public class PowerUp : MonoBehaviour
                 break;
 
             case Type.Starman:
-                //TODO
+                player.gameObject.GetComponent<Player>().Starpower();
                 break;
         }
 

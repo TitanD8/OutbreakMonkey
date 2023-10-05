@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class MarioSpriteController : MonoBehaviour
 {
-    private SpriteRenderer spriteRenderer;
+    public SpriteRenderer spriteRenderer { get; private set; }
     private PlayerInputController movement;
 
     public Sprite idle;
